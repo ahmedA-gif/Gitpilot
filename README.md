@@ -196,7 +196,7 @@ Hosted scans complete within a single request (up to 230 seconds) rather than de
 
 The release review fixed duplicate OSV queries for equivalent package names/versions while retaining all manifest sources, corrected numerical ordering of fixed versions, prevented unrelated affected packages from overriding severity, prioritized root manifests under discovery limits, and made malformed NVIDIA responses return readable errors. Selected signed reports now use request-local context rather than replacing a shared report. Hosted activity retains manual and assistant calls alongside scan calls; corrupt stored report entries are ignored.
 
-Validation: 96 backend tests, 3 frontend tests, production frontend build, dependency compatibility check, and whitespace/diff checks passed. The new frontend tests run on Node.js 20+ using the installed TypeScript compiler. `requirements.txt` now installs the exact versions in the tested lockfile. Existing `repoguard://` resource addresses remain compatible. Gitpilot is the product name.
+Validation: 96 backend tests, 3 frontend tests, production frontend build, dependency compatibility check, and whitespace/diff checks passed. The new frontend tests run on Node.js 20+ using the installed TypeScript compiler. `requirements.txt` lists the exact versions from the tested lockfile directly for compatibility with Vercel’s dependency parser. Existing `repoguard://` resource addresses remain compatible. Gitpilot is the product name.
 
 Configure the intended deployment explicitly:
 
