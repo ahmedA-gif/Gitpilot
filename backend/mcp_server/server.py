@@ -1,10 +1,12 @@
-"""RepoGuard MCP server: tools, resources, templates, and prompts."""
+"""Gitpilot MCP server: tools, resources, templates, and prompts."""
+from contextvars import ContextVar
 from fastmcp import FastMCP
 from backend.integrations import github, dependencies, pypi, osv, cisa
 from backend.services.readiness import evaluate
 
-mcp=FastMCP('RepoGuard MCP 2.0', instructions='Read-only evidence-based analysis of public Python repositories. Missing evidence must be reported as unknown.')
+mcp=FastMCP('Gitpilot MCP 2.0', instructions='Read-only evidence-based analysis of public Python repositories. Missing evidence must be reported as unknown.')
 REPORTS: dict[str, dict] = {}
+REPORT_CONTEXT: ContextVar[dict | None] = ContextVar('selected_report', default=None)
 
 @mcp.tool()
 async def get_repository_info(repository: str) -> dict:
@@ -73,7 +75,7 @@ async def evaluate_release_readiness(evidence: dict) -> dict:
 
 @mcp.resource('repoguard://about')
 def about() -> dict:
-    return {'name':'RepoGuard MCP','version':'2.0','tools':13,'scope':'Read-only public Python repositories','providers':['GitHub','PyPI','OSV','CISA KEV'],'storage':'Process memory only'}
+    return {'name':'Gitpilot MCP','version':'2.0','tools':13,'scope':'Read-only public GitHub repositories; Python package security checks','providers':['GitHub','PyPI','OSV','CISA KEV'],'storage':'Local process memory; signed browser-session reports when hosted'}
 
 @mcp.resource('repoguard://audit-policy')
 def audit_policy() -> dict:
@@ -90,6 +92,9 @@ async def repository_dependencies(owner: str, repo: str) -> dict:
 @mcp.resource('repoguard://repository/{owner}/{repo}/report')
 def latest_report(owner: str, repo: str) -> dict:
     repository=github.normalize_repository(owner+'/'+repo)
+    selected = REPORT_CONTEXT.get()
+    if selected and selected.get('repository') == repository:
+        return selected
     if repository not in REPORTS:
         return {'repository':repository,'status':'unavailable','detail':'No report exists in this process session.'}
     return REPORTS[repository]
@@ -97,7 +102,7 @@ def latest_report(owner: str, repo: str) -> dict:
 @mcp.prompt()
 def analyze_repository(repository: str) -> str:
     github.normalize_repository(repository)
-    return f'Analyze public repository {repository} using RepoGuard MCP tools. Cite tool evidence, explain coverage gaps, and distinguish unknown checks from passing checks. Do not execute repository code.'
+    return f'Analyze public repository {repository} using Gitpilot MCP tools. Cite tool evidence, explain coverage gaps, and distinguish unknown checks from passing checks. Do not execute repository code.'
 
 @mcp.prompt()
 def explain_security_finding(advisory_id: str, package: str) -> str:

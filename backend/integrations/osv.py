@@ -2,6 +2,7 @@ import asyncio
 import re
 from .http import request_json
 from packaging.version import Version, InvalidVersion
+from packaging.utils import canonicalize_name
 from ..schemas import SecurityFinding, DependencyFinding
 
 async def scan(dependencies: list[dict]) -> dict:
@@ -13,9 +14,22 @@ async def scan(dependencies: list[dict]) -> dict:
     for dep in pinned:
         if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,99}',dep['name']) or len(dep['version'])>100:
             raise ValueError('Invalid package name or version')
+        try:
+            Version(dep['version'])
+        except InvalidVersion:
+            raise ValueError('Enter an exact Python package version, such as 2.1.0.') from None
+    # Query each package/version once while retaining every declaring manifest.
+    unique = {}
+    for dep in pinned:
+        key = (canonicalize_name(dep['name']), Version(dep['version']))
+        if key not in unique:
+            unique[key] = dep | {'sources': []}
+        if dep['source'] and dep['source'] not in unique[key]['sources']:
+            unique[key]['sources'].append(dep['source'])
+    pinned = list(unique.values())
     if not pinned:
         return {'findings':[],'scanned':0,'skipped':skipped,'coverage':'unknown','notes':['No exact pinned package versions available; absence of findings does not indicate safety.']}
-    batch=await request_json('https://api.osv.dev/v1/querybatch',method='POST',payload={'queries':[{'package':{'name':x['name'],'ecosystem':'PyPI'},'version':x['version']} for x in pinned]})
+    batch=await request_json('https://api.osv.dev/v1/querybatch',method='POST',payload={'queries':[{'package':{'name':canonicalize_name(x['name']),'ecosystem':'PyPI'},'version':x['version']} for x in pinned]})
     findings=[]
     errors=[]
     pending=[]
@@ -36,7 +50,8 @@ async def scan(dependencies: list[dict]) -> dict:
                 continue
             fixed=[]
             for affected in advisory.get('affected',[]):
-                if affected.get('package',{}).get('name','').lower().replace('_','-') != dep['name'].lower().replace('_','-'):
+                package = affected.get('package', {})
+                if canonicalize_name(package.get('name','')) != canonicalize_name(dep['name']) or package.get('ecosystem', 'PyPI') != 'PyPI':
                     continue
                 for ranges in affected.get('ranges',[]):
                     fixed.extend(event['fixed'] for event in ranges.get('events',[]) if 'fixed' in event)
@@ -51,8 +66,10 @@ async def scan(dependencies: list[dict]) -> dict:
             fixed=sorted(set(upgrades), key=Version)
             severity=advisory.get('database_specific',{}).get('severity','UNKNOWN')
             for affected in advisory.get('affected',[]):
-                severity=affected.get('ecosystem_specific',{}).get('severity',severity)
-            findings.append(SecurityFinding(id=identifier,package=dep['name'],version=dep['version'],source=dep['source'],sources=[dep['source']] if dep['source'] else [],summary=advisory.get('summary') or advisory.get('details','')[:350],severity=str(severity).upper(),aliases=advisory.get('aliases',[]),fixed_versions=sorted(set(fixed)),references=[x['url'] for x in advisory.get('references',[])][:5]).model_dump())
+                package = affected.get('package', {})
+                if canonicalize_name(package.get('name','')) == canonicalize_name(dep['name']) and package.get('ecosystem', 'PyPI') == 'PyPI':
+                    severity=affected.get('ecosystem_specific',{}).get('severity',severity)
+            findings.append(SecurityFinding(id=identifier,package=dep['name'],version=dep['version'],source=dep['source'],sources=dep['sources'],summary=advisory.get('summary') or advisory.get('details','')[:350],severity=str(severity).upper(),aliases=advisory.get('aliases',[]),fixed_versions=fixed,references=[x['url'] for x in advisory.get('references',[])][:5]).model_dump())
         except Exception as exc:
             errors.append(f'{identifier}: {exc}')
     findings = merge_aliases(findings)
@@ -66,7 +83,7 @@ def merge_aliases(findings: list[dict]) -> list[dict]:
     for original in findings:
         item = dict(original)
         identities = set([item['id'], *item.get('aliases', [])])
-        matches = [existing for existing in merged if existing['package'].lower().replace('_','-') == item['package'].lower().replace('_','-') and existing['version'] == item['version'] and identities.intersection([existing['id'], *existing.get('aliases', [])])]
+        matches = [existing for existing in merged if canonicalize_name(existing['package']) == canonicalize_name(item['package']) and existing['version'] == item['version'] and identities.intersection([existing['id'], *existing.get('aliases', [])])]
         if not matches:
             merged.append(item)
             continue

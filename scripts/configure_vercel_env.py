@@ -2,13 +2,18 @@
 from pathlib import Path
 import json
 import secrets
+import argparse
 import subprocess
 from dotenv import dotenv_values, set_key
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--project', required=True, help='Exact linked project name to configure')
+parser.add_argument('--scope', required=True, help='Vercel account or team scope')
+args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 link = json.loads((root / '.vercel/project.json').read_text())
-if link.get('projectName') != 'repopilot' and link.get('projectId') != 'prj_Aq2JnWdFHS5DsABlK6NRLhhg9jTx':
-    raise SystemExit('The linked project is not the intended RepoPilot project.')
+if link.get('projectName') != args.project:
+    raise SystemExit('The linked Vercel project does not match --project. No secrets were sent.')
 values = dict(dotenv_values(root / '.env'))
 if not values.get('REPORT_SIGNING_SECRET'):
     values['REPORT_SIGNING_SECRET'] = secrets.token_urlsafe(48)
@@ -18,7 +23,7 @@ for key in ['NVIDIA_API_KEY', 'NVIDIA_MODEL', 'GITHUB_TOKEN', 'REPORT_SIGNING_SE
     if not values.get(key):
         continue
     for target in ['production', 'preview']:
-        command = ['vercel', 'env', 'add', key, target, '--yes', '--scope', 'ahmedg12104-gmailcoms-projects']
+        command = ['vercel', 'env', 'add', key, target, '--yes', '--scope', args.scope]
         if key != 'NVIDIA_MODEL':
             command.append('--sensitive')
         result = subprocess.run(command, input=values[key], text=True, capture_output=True, cwd=root)

@@ -1,4 +1,4 @@
-# RepoPilot — RepoGuard MCP 2.0
+# Gitpilot — RepoGuard MCP 2.0
 
 A read-only audit workspace for public Python repositories. A React console runs real GitHub, PyPI, OSV, and CISA checks through a custom MCP server and an independent MCP client. The NVIDIA assistant can discover and call the same tools. There is no login or database; local audit history and provider caches live in process memory. On Vercel, completed reports stay in the browser tab and carry a server-signed copy for downloads and AI context.
 
@@ -91,7 +91,7 @@ Use `http://127.0.0.1:8000/mcp/` as the Inspector server URL while the backend i
 
 ## Verification
 
-The automated suite includes 85 tests covering protocol discovery, input restrictions, parser coverage, readiness, advisory aliases, and readable reports. Live verification exercised all 12 tools, five resources and templates, three prompts, both report exports, the official MCP Inspector, and a NVIDIA-triggered MCP call against a public repository. Advisory data and counts change with upstream updates; skipped dependencies are reported as incomplete coverage.
+The automated suite includes 96 backend tests and 3 frontend regression tests covering protocol discovery, input restrictions, parser coverage, readiness, advisory aliases, and readable reports. Live verification exercised all 12 tools, five resources and templates, three prompts, both report exports, the official MCP Inspector, and a NVIDIA-triggered MCP call against a public repository. Advisory data and counts change with upstream updates; skipped dependencies are reported as incomplete coverage.
 
 ```bash
 .venv/bin/python -m pytest -q
@@ -178,16 +178,30 @@ RepoGuard combines discoverable MCP tools with OSV package advisories, CISA know
 
 Verification of the expanded overview: 85 automated tests passed and the production frontend built successfully. A live scan of psf/requests retrieved all seven overview sections (2 languages, 2,894 README characters, 10 releases, 8 branches, 20 contributors, 7 community-file entries and 153 file paths). The overview resource and HTML/JSON reports passed live checks. The complete scan remained partial because Python dependency security coverage was incomplete. Browser checks confirmed README presentation and file search for pyproject.toml.
 
-## Deploy RepoPilot to Vercel
+## Deploy Gitpilot to Vercel
 
-The repository is published at https://github.com/ahmedA-gif/RepoPilot. The root `app.py` exposes the FastAPI app; `vercel.json` builds the React frontend and promotes its files to `public/` for CDN delivery. Python 3.12 is selected in `.python-version`.
+The repository is published at https://github.com/ahmedA-gif/Gitpilot. The root `app.py` exposes the FastAPI app; `vercel.json` builds the React frontend and promotes its files to `public/` for CDN delivery. Python 3.12 is selected in `.python-version`.
 
 ```bash
-vercel link --project repopilot --scope ahmedg12104-gmailcoms-projects --yes
+vercel link --project gitpilot --scope ahmedg12104-gmailcoms-projects --yes
 vercel project inspect --non-interactive --yes
 vercel deploy --prod --yes
 ```
 
-Set `NVIDIA_API_KEY` and `REPORT_SIGNING_SECRET` as sensitive server environment variables in Production and Preview. Set `NVIDIA_MODEL` if overriding the default model; `GITHUB_TOKEN` is optional. None of these private variables belong in a `VITE_` variable or source control. Use a stable, randomly generated signing secret to keep saved reports valid across deployments. The included `scripts/configure_vercel_env.py` configures the known RepoPilot target from the ignored local `.env`, passing values via stdin without printing them.
+Set `NVIDIA_API_KEY` and `REPORT_SIGNING_SECRET` as sensitive server environment variables in Production and Preview. Set `NVIDIA_MODEL` if overriding the default model; `GITHUB_TOKEN` is optional. None of these private variables belong in a `VITE_` variable or source control. Use a stable, randomly generated signing secret to keep saved reports valid across deployments. The included `scripts/configure_vercel_env.py` configures the known Gitpilot target from the ignored local `.env`, passing values via stdin without printing them.
 
 Hosted scans complete within a single request (up to 230 seconds) rather than depending on a background task surviving between function invocations. Recent reports are kept in browser session storage; downloads, latest-report resource requests, and AI follow-ups use the signed report copy and can run on another function instance. A refresh during an unfinished hosted request requires a new scan. The MCP HTTP transport is stateless. Local development retains background scanning with progress polling. Provider quotas and per-instance request budgets still apply; this no-database deployment is an MVP, not a distributed job system.
+
+## Gitpilot release verification — November 6, 2026
+
+The release review fixed duplicate OSV queries for equivalent package names/versions while retaining all manifest sources, corrected numerical ordering of fixed versions, prevented unrelated affected packages from overriding severity, prioritized root manifests under discovery limits, and made malformed NVIDIA responses return readable errors. Selected signed reports now use request-local context rather than replacing a shared report. Hosted activity retains manual and assistant calls alongside scan calls; corrupt stored report entries are ignored.
+
+Validation: 96 backend tests, 3 frontend tests, production frontend build, dependency compatibility check, and whitespace/diff checks passed. The new frontend tests run on Node.js 20+ using the installed TypeScript compiler. `requirements.txt` now installs the exact versions in the tested lockfile. Existing `repoguard://` resource addresses remain compatible. Gitpilot is the product name.
+
+Configure the intended deployment explicitly:
+
+```bash
+.venv/bin/python scripts/configure_vercel_env.py --project gitpilot --scope ahmedg12104-gmailcoms-projects
+```
+
+The helper verifies the linked project name before sending any server-only environment values. The GitHub origin is https://github.com/ahmedA-gif/Gitpilot; the prior RepoPilot repository remains available as the `repopilot` remote.

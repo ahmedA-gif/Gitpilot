@@ -93,6 +93,7 @@ async def ci_status(repository: str) -> dict:
 async def manifests(repository: str) -> dict:
     data = await structure(repository)
     paths = [x['path'] for x in data['paths'] if x['type']=='blob' and (x['path'].split('/')[-1]=='pyproject.toml' or re.search(r'(^|/)requirements[^/]*\.txt$', x['path']) or '/requirements/' in '/'+x['path'] and x['path'].endswith('.txt'))]
+    paths.sort(key=lambda path: (path.count('/'), path.split('/')[-1] not in {'pyproject.toml','requirements.txt'}, path.lower()))
     return {'manifests': paths[:15], 'truncated': data['truncated'] or len(paths)>15, 'limit':15}
 
 async def read_file(repository: str, path: str) -> str:

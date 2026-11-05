@@ -91,3 +91,13 @@ async def test_http_restricts_provider_hosts():
     from backend.integrations.http import request_json, ProviderError
     with pytest.raises(ProviderError):
         await request_json('http://169.254.169.254/latest/meta-data')
+
+async def test_root_manifests_are_not_lost_behind_example_directories(monkeypatch):
+    from backend.integrations import github
+    async def tree(_):
+        paths=[f'examples/{i}/requirements.txt' for i in range(20)]+['requirements.txt','pyproject.toml']
+        return {'paths':[{'path':path,'type':'blob'} for path in paths],'truncated':False}
+    monkeypatch.setattr(github,'structure',tree)
+    result=await github.manifests('owner/repo')
+    assert result['manifests'][:2]==['pyproject.toml','requirements.txt']
+    assert result['truncated'] is True

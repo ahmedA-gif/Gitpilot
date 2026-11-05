@@ -162,3 +162,20 @@ def test_signed_report_rejects_another_signing_key(client, monkeypatch):
     token = seal(stored_scan())
     monkeypatch.setenv('REPORT_SIGNING_SECRET', 'different-test-signing-key')
     assert client.post('/api/reports/export', json={'token': token, 'format': 'html'}).status_code == 422
+
+
+def test_selected_signed_resource_does_not_replace_another_report(client, monkeypatch):
+    import json
+    from backend.services.receipts import seal
+    from backend.mcp_server.server import REPORTS
+    monkeypatch.setenv('REPORT_SIGNING_SECRET','test-signing-key-only')
+    selected=stored_scan()
+    selected.id='selected-report'
+    REPORTS['pallets/flask']={'id':'newer-report','repository':'pallets/flask'}
+    response=client.post('/api/mcp/resource',json={'uri':'repoguard://repository/pallets/flask/report','report_token':seal(selected)})
+    assert response.status_code==200
+    assert 'selected-report' in json.dumps(response.json())
+    assert REPORTS['pallets/flask']['id']=='newer-report'
+    latest=client.post('/api/mcp/resource',json={'uri':'repoguard://repository/pallets/flask/report'})
+    assert 'newer-report' in json.dumps(latest.json())
+    REPORTS.pop('pallets/flask',None)

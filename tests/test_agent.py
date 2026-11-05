@@ -60,3 +60,17 @@ async def test_agent_total_tool_budget(monkeypatch):
     result = await agent.chat('Check CI', 'pallets/flask', [])
     assert count == 12
     assert len(result['executions']) == 12
+
+@pytest.mark.parametrize('payload',[{}, {'choices':[]}, {'choices':[{'message':{'content':42}}]}, {'choices':[{'message':{'tool_calls':[{}]}}]}])
+async def test_malformed_ai_responses_return_clear_errors(monkeypatch,payload):
+    monkeypatch.setenv('NVIDIA_API_KEY','test-only')
+    async def discover():return {'tools':[]}
+    class FakeClient:
+        def __init__(self,**kwargs):pass
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def post(self,*args,**kwargs):return SimpleNamespace(status_code=200,json=lambda:payload)
+    monkeypatch.setattr(agent,'discover',discover)
+    monkeypatch.setattr(agent.httpx,'AsyncClient',FakeClient)
+    with pytest.raises(ValueError,match='unreadable response'):
+        await agent.chat('Question','owner/repo',[])

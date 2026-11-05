@@ -37,7 +37,7 @@ async def lifespan(app):
         task.cancel()
     await asyncio.gather(*TASKS, return_exceptions=True)
 
-app = FastAPI(title='RepoGuard MCP', version='2.0.0', lifespan=lifespan)
+app = FastAPI(title='Gitpilot MCP', version='2.0.0', lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=['localhost', '127.0.0.1', '[::1]', 'testserver'] + (['*.vercel.app'] if HOSTED else []))
 LIMITS = defaultdict(deque)
 
@@ -199,17 +199,21 @@ async def tool_call(body: ToolRequest):
 @app.post('/api/mcp/resource')
 async def resource(body: ResourceRequest):
     from fastmcp import Client
+    from backend.mcp_server.server import REPORT_CONTEXT
+    context_token = None
     if body.report_token:
         scan = saved_report(body.report_token)
         if body.uri == f'repoguard://repository/{scan.repository}/report':
-            from backend.mcp_server.server import REPORTS
-            REPORTS[scan.repository] = scan.model_dump(exclude={'report_token'})
+            context_token = REPORT_CONTEXT.set(scan.model_dump(exclude={'report_token'}))
     try:
         async with Client(mcp) as client:
             blocks = await client.read_resource(body.uri)
             return {'result': [b.model_dump(mode='json') for b in blocks]}
     except Exception as exc:
         raise HTTPException(422, str(exc)[:500]) from exc
+    finally:
+        if context_token is not None:
+            REPORT_CONTEXT.reset(context_token)
 
 @app.post('/api/mcp/prompt')
 async def prompt(body: ToolRequest):
